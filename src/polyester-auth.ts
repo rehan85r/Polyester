@@ -103,8 +103,7 @@ export function getSigningKeyStatus(): { configured: boolean; validFormat: boole
 }
 
 /**
- * Performs a harmless authenticated read probe. The response body is discarded;
- * only the HTTP status is used so account/key metadata is never exposed.
+ * Performs a harmless authenticated read probe. The response body is discarded; only the HTTP status is used so account identity and key metadata are never exposed. The Me endpoint accepts API-key authentication without a policy.
  */
 export async function probePolyesterApiKey(): Promise<{
   httpStatus: number;
@@ -113,7 +112,7 @@ export async function probePolyesterApiKey(): Promise<{
 }> {
   const configuredBaseUrl = process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com";
   const baseUrl = configuredBaseUrl.endsWith("/") ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl;
-  const url = `${baseUrl}/auth.v1.ApiKeyService/ListApiKeys`;
+  const url = `${baseUrl}/auth.v1.AuthService/Me`;
   const body = "{}";
   const headers = createPolyesterAuthHeaders({ url, method: "POST", body });
   const response = await fetch(url, {
