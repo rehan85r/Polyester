@@ -4,7 +4,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
-import { getSigningKeyStatus, probePolyesterApiKey } from "./polyester-auth.js";
+import { getSigningKeyStatus, getPolyesterBalances, probePolyesterApiKey } from "./polyester-auth.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -50,6 +50,35 @@ function createServer() {
         }, null, 2)
       }]
     };
+  });
+
+  server.registerTool("polyester_get_balances", {
+    title: "Check Polyester testnet token balances",
+    description: "Read-only: fetches all supported token balances for the authenticated root account, including zero balances. Shows available, funding, trading and reserved amounts. Does not move funds.",
+    inputSchema: {}
+  }, async () => {
+    try {
+      const balances = await getPolyesterBalances();
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            network: "Polyester Testnet",
+            accountScope: "authenticated root account",
+            balanceCount: balances.length,
+            balances
+          }, null, 2)
+        }]
+      };
+    } catch (error) {
+      return {
+        isError: true,
+        content: [{
+          type: "text",
+          text: error instanceof Error ? error.message : "Unable to retrieve Polyester balances"
+        }]
+      };
+    }
   });
 
   server.registerTool("polyester_daily_claim", {
