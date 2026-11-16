@@ -4,7 +4,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
-import { getSigningKeyStatus } from "./polyester-auth.js";
+import { getSigningKeyStatus, probePolyesterApiKey } from "./polyester-auth.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -26,22 +26,31 @@ function createServer() {
 
   server.registerTool("polyester_status", {
     title: "Polyester integration status",
-    description: "Reports connector configuration status. Does not access or change funds.",
+    description: "Reports connector configuration and performs a harmless signed read-only API-key authentication probe. Does not change funds.",
     inputSchema: {}
-  }, async () => ({
-    content: [{
-      type: "text",
-      text: JSON.stringify({
-        service: "polyester-mcp",
-        polyesterBaseUrl: process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com",
-        credentialsConfigured: Boolean(process.env.POLYESTER_API_KEY_ID && process.env.POLYESTER_API_PRIVATE_KEY),
-        signingKey: getSigningKeyStatus(),
-        tradingEnabled: false,
-        dailyClaimEnabled: false,
-        note: "Ed25519 signing support is implemented for 32-byte hexadecimal seeds. API operations remain disabled until the registered public key match and endpoint policy are verified."
-      }, null, 2)
-    }]
-  }));
+  }, async () => {
+    let apiKeyProbe: Awaited<ReturnType<typeof probePolyesterApiKey>> | { error: string };
+    try {
+      apiKeyProbe = await probePolyesterApiKey();
+    } catch (error) {
+      apiKeyProbe = { error: error instanceof Error ? error.message : "API key probe failed" };
+    }
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          service: "polyester-mcp",
+          polyesterBaseUrl: process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com",
+          credentialsConfigured: Boolean(process.env.POLYESTER_API_KEY_ID && process.env.POLYESTER_API_PRIVATE_KEY),
+          signingKey: getSigningKeyStatus(),
+          apiKeyProbe,
+          tradingEnabled: false,
+          dailyClaimEnabled: false,
+          note: "The probe calls ListApiKeys and discards its response body. Swap and claim remain disabled."
+        }, null, 2)
+      }]
+    };
+  });
 
   server.registerTool("polyester_daily_claim", {
     title: "Claim Polyester daily reward",
