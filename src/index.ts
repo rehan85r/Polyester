@@ -4,6 +4,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+import { getSigningKeyStatus } from "./polyester-auth.js";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -34,9 +35,10 @@ function createServer() {
         service: "polyester-mcp",
         polyesterBaseUrl: process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com",
         credentialsConfigured: Boolean(process.env.POLYESTER_API_KEY_ID && process.env.POLYESTER_API_PRIVATE_KEY),
+        signingKey: getSigningKeyStatus(),
         tradingEnabled: false,
         dailyClaimEnabled: false,
-        note: "API signing and endpoint authorization are being validated; operations remain disabled."
+        note: "Ed25519 signing support is implemented for 32-byte hexadecimal seeds. API operations remain disabled until the registered public key match and endpoint policy are verified."
       }, null, 2)
     }]
   }));
