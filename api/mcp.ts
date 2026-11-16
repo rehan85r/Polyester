@@ -3,7 +3,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
-import { getSigningKeyStatus, getPolyesterBalances, probePolyesterApiKey } from "../src/polyester-auth.js";
+import {
+  getSigningKeyStatus,
+  getPolyesterBalances,
+  probePolyesterApiKey,
+  polyesterConnectRpc
+} from "../src/polyester-auth.js";
 
 type VercelRequest = IncomingMessage & { body?: unknown };
 
@@ -15,129 +20,175 @@ function isAuthorized(header: string | string[] | undefined): boolean {
   return supplied.length === expected.length && timingSafeEqual(supplied, expected);
 }
 
+function toE18(value: string): { hi: string; lo: string } {
+  if (!/^(?:0|[1-9]\\d*)(?:\\.\\d{1,18})?$/.test(value)) throw new Error("Amount must be a positive decimal with up to 18 places");
+  const [whole, fraction = ""] = value.split(".");
+  const units = BigInt(whole) * 10n ** 18n + BigInt((fraction + "0".repeat(18)).slice(0, 18));
+  if (units <= 0n || units >= 1n << 128n) throw new Error("Amount is outside the supported 128-bit range");
+  const mask = (1n << 64n) - 1n;
+  return { hi: (units >> 64n).toString(), lo: (units & mask).toString() };
+}
+
+function requireE18(value: { hi: string; lo: string }): { hi: string; lo: string } {
+  for (const part of [value.hi, value.lo]) {
+    if (!/^(0|[1-9]\\d*)$/.test(part) || BigInt(part) > (1n << 64n) - 1n) {
+      throw new Error("Invalid 128-bit E18 amount");
+    }
+  }
+  if (BigInt(value.hi) === 0n && BigInt(value.lo) === 0n) throw new Error("E18 amount must be positive");
+  return value;
+}
+
 function createServer(): McpServer {
-  const server = new McpServer({ name: "polyester-mcp", version: "0.1.0" });
+  const server = new McpServer({ name: "polyester-mcp", version: "0.2.0" });
 
   server.registerTool("polyester_status", {
     title: "Polyester integration status",
-    description: "Reports connector configuration and performs a harmless signed read-only API-key authentication probe. Does not change funds.",
+    description: "Reports connector configuration and performs a harmless signed read-only API-key authentication probe.",
     inputSchema: {}
   }, async () => {
     let apiKeyProbe: Awaited<ReturnType<typeof probePolyesterApiKey>> | { error: string };
-    try {
-      apiKeyProbe = await probePolyesterApiKey();
-    } catch (error) {
-      apiKeyProbe = { error: error instanceof Error ? error.message : "API key probe failed" };
-    }
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          service: "polyester-mcp",
-          polyesterBaseUrl: process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com",
-          credentialsConfigured: Boolean(process.env.POLYESTER_API_KEY_ID && process.env.POLYESTER_API_PRIVATE_KEY),
-          signingKey: getSigningKeyStatus(),
-          apiKeyProbe,
-          tradingEnabled: false,
-          dailyClaimEnabled: false,
-          note: "The probe calls the policy-free AuthService/Me endpoint and discards its response body. Swap and claim remain disabled."
-        }, null, 2)
-      }]
-    };
+    try { apiKeyProbe = await probePolyesterApiKey(); }
+    catch (error) { apiKeyProbe = { error: error instanceof Error ? error.message : "API key probe failed" }; }
+    return { content: [{ type: "text", text: JSON.stringify({
+      service: "polyester-mcp",
+      polyesterBaseUrl: process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com",
+      credentialsConfigured: Boolean(process.env.POLYESTER_API_KEY_ID && process.env.POLYESTER_API_PRIVATE_KEY),
+      signingKey: getSigningKeyStatus(),
+      apiKeyProbe,
+      tradingEnabled: true,
+      dailyClaimEnabled: true,
+      checkpointsEnabled: false,
+      note: "Daily claims and spot swaps are exposed through authenticated ConnectRPC. Claim and swap execution require explicit confirmation."
+    }, null, 2) }] };
   });
 
   server.registerTool("polyester_get_balances", {
     title: "Check Polyester testnet token balances",
-    description: "Read-only: fetches all supported token balances for the authenticated root account, including zero balances. Shows available, funding, trading and reserved amounts. Does not move funds.",
+    description: "Read-only balance lookup. Does not move funds.",
     inputSchema: {}
   }, async () => {
     try {
       const balances = await getPolyesterBalances();
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify({
-            network: "Polyester Testnet",
-            accountScope: "authenticated root account",
-            balanceCount: balances.length,
-            balances
-          }, null, 2)
-        }]
-      };
+      return { content: [{ type: "text", text: JSON.stringify({
+        network: "Polyester Testnet", accountScope: "authenticated root account", balanceCount: balances.length, balances
+      }, null, 2) }] };
     } catch (error) {
-      return {
-        isError: true,
-        content: [{
-          type: "text",
-          text: error instanceof Error ? error.message : "Unable to retrieve Polyester balances"
-        }]
-      };
+      return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : "Unable to retrieve balances" }] };
     }
   });
 
-  server.registerTool("polyester_daily_claim", {
-    title: "Claim Polyester daily reward",
-    description: "Disabled until account authorization and the official claim request are fully implemented and tested.",
+  server.registerTool("polyester_daily_claim_status", {
+    title: "Check Polyester daily reward status",
+    description: "Read-only: checks today's root-account reward, claim state, reset time and reward assets.",
     inputSchema: {}
-  }, async () => ({
-    isError: true,
-    content: [{ type: "text", text: "Daily claim is not enabled yet. No request was sent." }]
-  }));
+  }, async () => {
+    try {
+      const result = await polyesterConnectRpc("claims.v1.ClaimsService/GetDailyClaimStatus", {});
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (error) {
+      return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : "Unable to check daily claim status" }] };
+    }
+  });
+
+  server.registerTool("polyester_claim_daily_reward", {
+    title: "Claim Polyester daily reward",
+    description: "Claims today's reward to the authenticated root account. This moves the reward and requires the exact confirmation string CLAIM_DAILY_REWARD.",
+    inputSchema: { confirmation: z.literal("CLAIM_DAILY_REWARD") }
+  }, async ({ confirmation }) => {
+    if (confirmation !== "CLAIM_DAILY_REWARD") return { isError: true, content: [{ type: "text", text: "Claim not confirmed. No request was sent." }] };
+    try {
+      const result = await polyesterConnectRpc("claims.v1.ClaimsService/ClaimDailyReward", {});
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (error) {
+      return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : "Daily reward claim failed" }] };
+    }
+  });
 
   server.registerTool("polyester_swap_quote", {
-    title: "Get Polyester swap quote",
-    description: "Disabled until signed ConnectRPC transport and quote request validation are implemented.",
+    title: "Get Polyester spot swap quote",
+    description: "Read-only quote for a direct spot conversion. Amount is in whole asset units; slippage is 1-1000 basis points. A quote does not reserve funds or execute a trade.",
     inputSchema: {
-      fromAsset: z.string().min(1),
-      toAsset: z.string().min(1),
-      amount: z.string().regex(/^\d+(\.\d+)?$/)
+      sourceAssetId: z.number().int().positive(),
+      destinationAssetId: z.number().int().positive(),
+      amount: z.string().regex(/^(?:0|[1-9]\\d*)(?:\\.\\d{1,18})?$/),
+      maxSlippageBps: z.number().int().min(1).max(1000)
     }
-  }, async () => ({
-    isError: true,
-    content: [{ type: "text", text: "Swap quote is not enabled yet. No request was sent." }]
-  }));
+  }, async ({ sourceAssetId, destinationAssetId, amount, maxSlippageBps }) => {
+    if (sourceAssetId === destinationAssetId) return { isError: true, content: [{ type: "text", text: "Source and destination assets must differ." }] };
+    try {
+      const result = await polyesterConnectRpc("swap.v1.SwapService/QuoteSwap", {
+        terms: { sourceAssetId, destinationAssetId, amountE18: toE18(amount) },
+        maxSlippageBps
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (error) {
+      return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : "Unable to obtain swap quote" }] };
+    }
+  });
 
   server.registerTool("polyester_execute_swap", {
-    title: "Execute confirmed Polyester swap",
-    description: "Disabled. Will require an explicit confirmation and a validated, unexpired quote.",
+    title: "Execute confirmed Polyester spot swap",
+    description: "Executes the exact quoted conversion after repricing and enforcing its minimum output and expiry. Requires an idempotency key and the exact confirmation string CONFIRM_SWAP. This is a real trade.",
     inputSchema: {
-      quoteId: z.string().min(1),
+      sourceAssetId: z.number().int().positive(),
+      destinationAssetId: z.number().int().positive(),
+      amount: z.string().regex(/^(?:0|[1-9]\\d*)(?:\\.\\d{1,18})?$/),
+      minAmountOutE18: z.object({ hi: z.string(), lo: z.string() }),
+      quoteExpiresAt: z.string().datetime(),
+      idempotencyKey: z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/),
       confirmation: z.literal("CONFIRM_SWAP")
     }
-  }, async () => ({
-    isError: true,
-    content: [{ type: "text", text: "Swap execution is disabled until signing, quote binding, expiry, slippage and confirmation handling are implemented and tested. No transaction was sent." }]
-  }));
+  }, async ({ sourceAssetId, destinationAssetId, amount, minAmountOutE18, quoteExpiresAt, idempotencyKey, confirmation }) => {
+    if (confirmation !== "CONFIRM_SWAP") return { isError: true, content: [{ type: "text", text: "Swap not confirmed. No order was submitted." }] };
+    if (sourceAssetId === destinationAssetId) return { isError: true, content: [{ type: "text", text: "Source and destination assets must differ." }] };
+    try {
+      const result = await polyesterConnectRpc("swap.v1.SwapService/CreateSwap", {
+        idempotencyKey,
+        terms: { sourceAssetId, destinationAssetId, amountE18: toE18(amount) },
+        minAmountOutE18: requireE18(minAmountOutE18),
+        quoteExpiresAt
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (error) {
+      return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : "Swap execution failed" }] };
+    }
+  });
+
+  server.registerTool("polyester_get_swap", {
+    title: "Check Polyester swap execution",
+    description: "Read-only: retrieves a swap by its swap ID or idempotency key. Use it to reconcile execution until terminal.",
+    inputSchema: {
+      swapId: z.string().optional(),
+      idempotencyKey: z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/).optional()
+    }
+  }, async ({ swapId, idempotencyKey }) => {
+    if ((!swapId && !idempotencyKey) || (swapId && idempotencyKey)) return { isError: true, content: [{ type: "text", text: "Provide exactly one of swapId or idempotencyKey." }] };
+    try {
+      const result = await polyesterConnectRpc("swap.v1.SwapService/GetSwap", swapId ? { swapId } : { idempotencyKey });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (error) {
+      return { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : "Unable to retrieve swap" }] };
+    }
+  });
 
   return server;
 }
 
 export default async function handler(req: VercelRequest, res: ServerResponse): Promise<void> {
   if (req.method !== "POST") {
-    res.statusCode = 405;
-    res.setHeader("Allow", "POST");
-    res.end("Method Not Allowed");
-    return;
+    res.statusCode = 405; res.setHeader("Allow", "POST"); res.end("Method Not Allowed"); return;
   }
-
   if (!isAuthorized(req.headers.authorization)) {
-    res.statusCode = 401;
-    res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ error: "Unauthorized" }));
-    return;
+    res.statusCode = 401; res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify({ error: "Unauthorized" })); return;
   }
-
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   try {
     await createServer().connect(transport);
     await transport.handleRequest(req as never, res as never, req.body);
   } catch (error) {
     console.error("Polyester MCP request failed", error);
-    if (!res.headersSent) {
-      res.statusCode = 500;
-      res.setHeader("Content-Type", "application/json");
-      res.end(JSON.stringify({ error: "Internal server error" }));
-    }
+    if (!res.headersSent) { res.statusCode = 500; res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify({ error: "Internal server error" })); }
   } finally {
     await transport.close().catch(() => undefined);
   }
