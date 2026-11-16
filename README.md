@@ -16,4 +16,4 @@ Set `PORT` automatically via Railway. Configure the remaining variables only aft
 `/mcp` (Streamable HTTP). Health check: `/health`.
 
 ## Current status
-MCP transport scaffold only. Polyester claim/swap calls are intentionally not wired to guessed endpoints.
+MCP transport scaffold only. Verified Testnet API host: `https://api.testnet.polyester.com`. Daily claims and swap methods are documented, but the connector will remain fail-closed until their exact generated ConnectRPC contracts and signed transport are implemented and tested.
