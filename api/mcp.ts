@@ -90,7 +90,7 @@ function createServer(): McpServer {
     inputSchema: {
       fromAsset: z.string().min(1),
       toAsset: z.string().min(1),
-      amount: z.string().regex(/^\\d+(\\.\\d+)?$/)
+      amount: z.string().regex(/^\d+(\.\d+)?$/)
     }
   }, async () => ({
     isError: true,
