@@ -36,23 +36,23 @@ function createServer() {
         credentialsConfigured: Boolean(process.env.POLYESTER_API_KEY_ID && process.env.POLYESTER_API_PRIVATE_KEY),
         tradingEnabled: false,
         dailyClaimEnabled: false,
-        note: "Polyester API authentication and ConnectRPC schemas must be verified before enabling operations."
+        note: "API signing and endpoint authorization are being validated; operations remain disabled."
       }, null, 2)
     }]
   }));
 
   server.registerTool("polyester_daily_claim", {
     title: "Claim Polyester daily reward",
-    description: "Currently disabled until official authentication and request schema are verified. Never retries automatically.",
+    description: "Disabled until account authorization and the official claim request are fully implemented and tested.",
     inputSchema: {}
   }, async () => ({
     isError: true,
-    content: [{ type: "text", text: "Daily claim is not enabled yet: official API authentication and request schema verification is pending. No request was sent." }]
+    content: [{ type: "text", text: "Daily claim is not enabled yet. No request was sent." }]
   }));
 
   server.registerTool("polyester_swap_quote", {
     title: "Get Polyester swap quote",
-    description: "Currently disabled until official swap quote schema and authentication are verified.",
+    description: "Disabled until signed ConnectRPC transport and quote request validation are implemented.",
     inputSchema: {
       fromAsset: z.string().min(1),
       toAsset: z.string().min(1),
@@ -60,19 +60,19 @@ function createServer() {
     }
   }, async () => ({
     isError: true,
-    content: [{ type: "text", text: "Swap quote is not enabled yet: official request schema verification is pending. No request was sent." }]
+    content: [{ type: "text", text: "Swap quote is not enabled yet. No request was sent." }]
   }));
 
   server.registerTool("polyester_execute_swap", {
     title: "Execute confirmed Polyester swap",
-    description: "Disabled. Will require explicit confirmation and validated quote before execution.",
+    description: "Disabled. Will require an explicit confirmation and a validated, unexpired quote.",
     inputSchema: {
       quoteId: z.string().min(1),
       confirmation: z.literal("CONFIRM_SWAP")
     }
   }, async () => ({
     isError: true,
-    content: [{ type: "text", text: "Swap execution is disabled until API signing, quote binding, expiry, slippage and confirmation handling are implemented and tested. No transaction was sent." }]
+    content: [{ type: "text", text: "Swap execution is disabled until signing, quote binding, expiry, slippage and confirmation handling are implemented and tested. No transaction was sent." }]
   }));
 
   return server;
@@ -94,7 +94,7 @@ app.post("/mcp", async (req, res) => {
     } else if (!sessionId && isInitializeRequest(req.body)) {
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomBytes(24).toString("hex"),
-        onsessioninitialized: (id) => transports.set(id, transport)
+        onsessioninitialized: (id) => { transports.set(id, transport); }
       });
       transport.onclose = () => {
         const id = transport.sessionId;
