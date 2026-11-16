@@ -1,4 +1,5 @@
 import express from "express";
+import { z } from "zod";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -53,9 +54,9 @@ function createServer() {
     title: "Get Polyester swap quote",
     description: "Currently disabled until official swap quote schema and authentication are verified.",
     inputSchema: {
-      fromAsset: (await import("zod")).z.string().min(1),
-      toAsset: (await import("zod")).z.string().min(1),
-      amount: (await import("zod")).z.string().regex(/^\\d+(\\.\\d+)?$/)
+      fromAsset: z.string().min(1),
+      toAsset: z.string().min(1),
+      amount: z.string().regex(/^\\d+(\\.\\d+)?$/)
     }
   }, async () => ({
     isError: true,
@@ -66,8 +67,8 @@ function createServer() {
     title: "Execute confirmed Polyester swap",
     description: "Disabled. Will require explicit confirmation and validated quote before execution.",
     inputSchema: {
-      quoteId: (await import("zod")).z.string().min(1),
-      confirmation: (await import("zod")).z.literal("CONFIRM_SWAP")
+      quoteId: z.string().min(1),
+      confirmation: z.literal("CONFIRM_SWAP")
     }
   }, async () => ({
     isError: true,
