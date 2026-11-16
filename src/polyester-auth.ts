@@ -111,7 +111,8 @@ export async function probePolyesterApiKey(): Promise<{
   authentication: "accepted" | "rejected" | "indeterminate";
   permission: "allowed" | "denied" | "unknown";
 }> {
-  const baseUrl = (process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com").replace(/\/$/, "");
+  const configuredBaseUrl = process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com";
+  const baseUrl = configuredBaseUrl.endsWith("/") ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl;
   const url = `${baseUrl}/auth.v1.ApiKeyService/ListApiKeys`;
   const body = "{}";
   const headers = createPolyesterAuthHeaders({ url, method: "POST", body });
