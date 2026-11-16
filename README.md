@@ -31,21 +31,18 @@ The MCP bearer token is separate from the Polyester API credentials.
 
 ## Enabled Polyester API permissions
 
-The integration is limited to these four permission scopes:
+The integration is limited to these three permission scopes:
 
 | Permission | Access | MCP tools |
 | --- | --- | --- |
-| Spot Trading | Write | `polyester_swap_quote`, `polyester_execute_swap`, `polyester_get_swap` |
 | Daily Status | Read | `polyester_daily_claim_status` |
 | Daily Claim | Write | `polyester_claim_daily_reward` |
 | Balances | Read | `polyester_get_balances` |
 
-No VIP Status, Checkpoints, withdrawal, or unrelated API operations are exposed.
+No swap, trading, VIP Status, Checkpoints, withdrawal, or unrelated API operations are exposed.
 
 ## Safety model
 
 - Daily claim execution requires the exact `CLAIM_DAILY_REWARD` confirmation.
-- Swap execution requires the exact `CONFIRM_SWAP` confirmation, a quote expiry, minimum output and an idempotency key.
-- Swap quote generation and swap status retrieval are read-only.
-- No claim or trade is executed automatically.
+- No claim is executed automatically.
 - API credentials are read only from server environment variables.

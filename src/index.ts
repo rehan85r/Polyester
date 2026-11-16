@@ -1,5 +1,4 @@
 import express from "express";
-import { z } from "zod";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -46,7 +45,7 @@ function createServer() {
           apiKeyProbe,
           tradingEnabled: false,
           dailyClaimEnabled: false,
-          note: "The probe calls the policy-free AuthService/Me endpoint and discards its response body. Swap and claim remain disabled."
+          note: "The probe calls the policy-free AuthService/Me endpoint and discards its response body. Daily claim remains disabled."
         }, null, 2)
       }]
     };
@@ -88,31 +87,6 @@ function createServer() {
   }, async () => ({
     isError: true,
     content: [{ type: "text", text: "Daily claim is not enabled yet. No request was sent." }]
-  }));
-
-  server.registerTool("polyester_swap_quote", {
-    title: "Get Polyester swap quote",
-    description: "Disabled until signed ConnectRPC transport and quote request validation are implemented.",
-    inputSchema: {
-      fromAsset: z.string().min(1),
-      toAsset: z.string().min(1),
-      amount: z.string().regex(/^\d+(\.\d+)?$/)
-    }
-  }, async () => ({
-    isError: true,
-    content: [{ type: "text", text: "Swap quote is not enabled yet. No request was sent." }]
-  }));
-
-  server.registerTool("polyester_execute_swap", {
-    title: "Execute confirmed Polyester swap",
-    description: "Disabled. Will require an explicit confirmation and a validated, unexpired quote.",
-    inputSchema: {
-      quoteId: z.string().min(1),
-      confirmation: z.literal("CONFIRM_SWAP")
-    }
-  }, async () => ({
-    isError: true,
-    content: [{ type: "text", text: "Swap execution is disabled until signing, quote binding, expiry, slippage and confirmation handling are implemented and tested. No transaction was sent." }]
   }));
 
   return server;
