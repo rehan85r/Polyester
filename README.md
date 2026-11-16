@@ -1,6 +1,6 @@
 # Polyester MCP Connector
 
-Private MCP server for read-only Polyester Testnet account access, deployed on Vercel.
+Private MCP server for Polyester Testnet account access, deployed on Vercel.
 
 ## Deployment
 
@@ -14,12 +14,12 @@ The Vercel function is implemented in `api/mcp.ts` and routed by `vercel.json`.
 
 ## Environment variables
 
-Configure these in the Vercel project settings for Preview and Production:
+Configure these in Vercel for Preview and Production:
 
-- `MCP_BEARER_TOKEN` — strong private token used by the MCP client in the `Authorization: Bearer <token>` request header.
+- `MCP_BEARER_TOKEN` — strong private token used by the MCP client in the `Authorization: Bearer <token>` header.
 - `POLYESTER_API_KEY_ID` — Polyester API key ID.
 - `POLYESTER_API_PRIVATE_KEY` — Ed25519 signing seed. Keep secret.
-- `POLYESTER_BASE_URL` — use `https://api.testnet.polyester.com` for Testnet.
+- `POLYESTER_BASE_URL` — `https://api.testnet.polyester.com` for Testnet.
 
 Never commit secrets or paste private keys into chat.
 
@@ -33,16 +33,20 @@ The MCP bearer token is separate from the Polyester API credentials.
 
 ## Available tools
 
-- `polyester_status` — reports configuration and performs a harmless read-only API-key authentication probe.
-- `polyester_get_balances` — retrieves supported token balances for the authenticated account.
-- `polyester_daily_claim` — disabled; sends no request.
-- `polyester_swap_quote` — disabled; sends no request.
-- `polyester_execute_swap` — disabled; sends no request.
+- `polyester_status` — connector configuration and harmless signed API-key probe.
+- `polyester_get_balances` — read-only account balances.
+- `polyester_daily_claim_status` — read today's root-account reward and claim state.
+- `polyester_claim_daily_reward` — claims today's reward to the root account; requires exact `CLAIM_DAILY_REWARD` confirmation.
+- `polyester_swap_quote` — read-only direct spot swap quote with slippage protection.
+- `polyester_execute_swap` — executes a quoted swap only with exact `CONFIRM_SWAP` confirmation, a fresh quote expiry and idempotency key.
+- `polyester_get_swap` — reads swap execution status by swap ID or idempotency key.
 
 ## Safety model
 
-- No withdrawal or transfer tools are exposed.
-- Trading and daily claims remain disabled.
+- No withdrawal or external transfer tools are exposed.
+- Daily reward claims and spot swaps are available only through explicit MCP tool calls.
+- Claim and swap mutations require exact confirmation strings.
+- Swap execution re-prices against current market depth and enforces the quote's minimum output and expiry.
+- Each swap requires a caller-provided idempotency key so uncertain outcomes can be safely reconciled.
 - API credentials are read only from server environment variables.
-- Read-only status and balance retrieval have been tested against Polyester Testnet.
-- Do not enable trading or claims without implementing and independently testing the required signing, request validation, quote binding, expiry, slippage, and explicit confirmation safeguards.
+- Checkpoint reads are not exposed: Polyester documents this API as session-only, not API-key accessible.
