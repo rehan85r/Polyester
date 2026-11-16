@@ -3,12 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
-import {
-  getSigningKeyStatus,
-  getPolyesterBalances,
-  probePolyesterApiKey,
-  polyesterConnectRpc
-} from "../src/polyester-auth.js";
+import { getPolyesterBalances, polyesterConnectRpc } from "../src/polyester-auth.js";
 
 type VercelRequest = IncomingMessage & { body?: unknown };
 
@@ -21,7 +16,7 @@ function isAuthorized(header: string | string[] | undefined): boolean {
 }
 
 function toE18(value: string): { hi: string; lo: string } {
-  if (!/^(?:0|[1-9]\\d*)(?:\\.\\d{1,18})?$/.test(value)) throw new Error("Amount must be a positive decimal with up to 18 places");
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error("Amount must be a positive decimal with up to 18 places");
   const [whole, fraction = ""] = value.split(".");
   const units = BigInt(whole) * 10n ** 18n + BigInt((fraction + "0".repeat(18)).slice(0, 18));
   if (units <= 0n || units >= 1n << 128n) throw new Error("Amount is outside the supported 128-bit range");
@@ -31,7 +26,7 @@ function toE18(value: string): { hi: string; lo: string } {
 
 function requireE18(value: { hi: string; lo: string }): { hi: string; lo: string } {
   for (const part of [value.hi, value.lo]) {
-    if (!/^(0|[1-9]\\d*)$/.test(part) || BigInt(part) > (1n << 64n) - 1n) {
+    if (!/^(0|[1-9]\d*)$/.test(part) || BigInt(part) > (1n << 64n) - 1n) {
       throw new Error("Invalid 128-bit E18 amount");
     }
   }
@@ -41,27 +36,6 @@ function requireE18(value: { hi: string; lo: string }): { hi: string; lo: string
 
 function createServer(): McpServer {
   const server = new McpServer({ name: "polyester-mcp", version: "0.2.0" });
-
-  server.registerTool("polyester_status", {
-    title: "Polyester integration status",
-    description: "Reports connector configuration and performs a harmless signed read-only API-key authentication probe.",
-    inputSchema: {}
-  }, async () => {
-    let apiKeyProbe: Awaited<ReturnType<typeof probePolyesterApiKey>> | { error: string };
-    try { apiKeyProbe = await probePolyesterApiKey(); }
-    catch (error) { apiKeyProbe = { error: error instanceof Error ? error.message : "API key probe failed" }; }
-    return { content: [{ type: "text", text: JSON.stringify({
-      service: "polyester-mcp",
-      polyesterBaseUrl: process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com",
-      credentialsConfigured: Boolean(process.env.POLYESTER_API_KEY_ID && process.env.POLYESTER_API_PRIVATE_KEY),
-      signingKey: getSigningKeyStatus(),
-      apiKeyProbe,
-      tradingEnabled: true,
-      dailyClaimEnabled: true,
-      checkpointsEnabled: false,
-      note: "Daily claims and spot swaps are exposed through authenticated ConnectRPC. Claim and swap execution require explicit confirmation."
-    }, null, 2) }] };
-  });
 
   server.registerTool("polyester_get_balances", {
     title: "Check Polyester testnet token balances",
@@ -111,7 +85,7 @@ function createServer(): McpServer {
     inputSchema: {
       sourceAssetId: z.number().int().positive(),
       destinationAssetId: z.number().int().positive(),
-      amount: z.string().regex(/^(?:0|[1-9]\\d*)(?:\\.\\d{1,18})?$/),
+      amount: z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/),
       maxSlippageBps: z.number().int().min(1).max(1000)
     }
   }, async ({ sourceAssetId, destinationAssetId, amount, maxSlippageBps }) => {
@@ -133,7 +107,7 @@ function createServer(): McpServer {
     inputSchema: {
       sourceAssetId: z.number().int().positive(),
       destinationAssetId: z.number().int().positive(),
-      amount: z.string().regex(/^(?:0|[1-9]\\d*)(?:\\.\\d{1,18})?$/),
+      amount: z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/),
       minAmountOutE18: z.object({ hi: z.string(), lo: z.string() }),
       quoteExpiresAt: z.string().datetime(),
       idempotencyKey: z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/),
