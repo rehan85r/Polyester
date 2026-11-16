@@ -202,10 +202,10 @@ export async function polyesterConnectRpc<T = unknown>(
   methodPath: string,
   request: Record<string, unknown>
 ): Promise<T> {
-  if (!/^[a-z0-9.]+\\.[A-Za-z0-9]+\\/[A-Za-z0-9]+$/.test(methodPath)) {
+  if (!/^[a-z0-9.]+\.[A-Za-z0-9]+\/[A-Za-z0-9]+$/.test(methodPath)) {
     throw new Error("Invalid Polyester ConnectRPC method path");
   }
-  const base = (process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com").replace(/\\/$/, "");
+  const base = (process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com").replace(/\/$/, "");
   const url = `${base}/${methodPath}`;
   const body = JSON.stringify(request);
   const signed = createPolyesterAuthHeaders({ url, method: "POST", body });
