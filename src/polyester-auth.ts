@@ -139,3 +139,59 @@ export async function probePolyesterApiKey(): Promise<{
   }
   return { httpStatus: response.status, authentication: "indeterminate", permission: "unknown" };
 }
+
+
+export type PolyesterBalance = {
+  symbol: string;
+  available: string;
+  funding: string;
+  trading: string;
+  reserved: string;
+};
+
+/**
+ * Reads the authenticated root account's balances. Only public asset symbols
+ * and decimal balance fields are returned; revisions and account identifiers
+ * are deliberately omitted.
+ */
+export async function getPolyesterBalances(): Promise<PolyesterBalance[]> {
+  const configuredBaseUrl = process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com";
+  const baseUrl = configuredBaseUrl.endsWith("/") ? configuredBaseUrl.slice(0, -1) : configuredBaseUrl;
+  const url = `${baseUrl}/v1/balances`;
+  const headers = createPolyesterAuthHeaders({ url, method: "GET" });
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { ...headers, Accept: "*/*" }
+  });
+
+  if (!response.ok) {
+    await response.arrayBuffer();
+    throw new Error(`Polyester balance request failed with HTTP ${response.status}`);
+  }
+
+  const payload: unknown = await response.json();
+  if (!payload || typeof payload !== "object" || !("balances" in payload) || !Array.isArray(payload.balances)) {
+    throw new Error("Polyester returned an unexpected balance response");
+  }
+
+  return payload.balances.map((item: unknown) => {
+    if (!item || typeof item !== "object") throw new Error("Polyester returned an invalid balance row");
+    const row = item as Record<string, unknown>;
+    if (
+      typeof row.symbol !== "string" ||
+      typeof row.available !== "string" ||
+      typeof row.funding !== "string" ||
+      typeof row.trading !== "string" ||
+      typeof row.reserved !== "string"
+    ) {
+      throw new Error("Polyester returned an incomplete balance row");
+    }
+    return {
+      symbol: row.symbol,
+      available: row.available,
+      funding: row.funding,
+      trading: row.trading,
+      reserved: row.reserved
+    };
+  });
+}
