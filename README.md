@@ -10,8 +10,6 @@ Private MCP server for Polyester Testnet account access, deployed on Vercel.
 - Runtime: Node.js 22
 - MCP transport: Streamable HTTP, stateless per request
 
-The Vercel function is implemented in `api/mcp.ts` and routed by `vercel.json`.
-
 ## Environment variables
 
 Configure these in Vercel for Preview and Production:
@@ -31,22 +29,23 @@ Never commit secrets or paste private keys into chat.
 
 The MCP bearer token is separate from the Polyester API credentials.
 
-## Available tools
+## Enabled Polyester API permissions
 
-- `polyester_status` — connector configuration and harmless signed API-key probe.
-- `polyester_get_balances` — read-only account balances.
-- `polyester_daily_claim_status` — read today's root-account reward and claim state.
-- `polyester_claim_daily_reward` — claims today's reward to the root account; requires exact `CLAIM_DAILY_REWARD` confirmation.
-- `polyester_swap_quote` — read-only direct spot swap quote with slippage protection.
-- `polyester_execute_swap` — executes a quoted swap only with exact `CONFIRM_SWAP` confirmation, a fresh quote expiry and idempotency key.
-- `polyester_get_swap` — reads swap execution status by swap ID or idempotency key.
+The integration is limited to these four permission scopes:
+
+| Permission | Access | MCP tools |
+| --- | --- | --- |
+| Spot Trading | Write | `polyester_swap_quote`, `polyester_execute_swap`, `polyester_get_swap` |
+| Daily Status | Read | `polyester_daily_claim_status` |
+| Daily Claim | Write | `polyester_claim_daily_reward` |
+| Balances | Read | `polyester_get_balances` |
+
+No VIP Status, Checkpoints, withdrawal, or unrelated API operations are exposed.
 
 ## Safety model
 
-- No withdrawal or external transfer tools are exposed.
-- Daily reward claims and spot swaps are available only through explicit MCP tool calls.
-- Claim and swap mutations require exact confirmation strings.
-- Swap execution re-prices against current market depth and enforces the quote's minimum output and expiry.
-- Each swap requires a caller-provided idempotency key so uncertain outcomes can be safely reconciled.
+- Daily claim execution requires the exact `CLAIM_DAILY_REWARD` confirmation.
+- Swap execution requires the exact `CONFIRM_SWAP` confirmation, a quote expiry, minimum output and an idempotency key.
+- Swap quote generation and swap status retrieval are read-only.
+- No claim or trade is executed automatically.
 - API credentials are read only from server environment variables.
-- Checkpoint reads are not exposed: Polyester documents this API as session-only, not API-key accessible.
