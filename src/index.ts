@@ -46,7 +46,7 @@ function createServer() {
           apiKeyProbe,
           tradingEnabled: false,
           dailyClaimEnabled: false,
-          note: "The probe calls ListApiKeys and discards its response body. Swap and claim remain disabled."
+          note: "The probe calls the policy-free AuthService/Me endpoint and discards its response body. Swap and claim remain disabled."
         }, null, 2)
       }]
     };
