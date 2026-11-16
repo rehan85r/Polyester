@@ -101,3 +101,41 @@ export function getSigningKeyStatus(): { configured: boolean; validFormat: boole
   }
   return { configured: true, validFormat: false, format: "unsupported" };
 }
+
+/**
+ * Performs a harmless authenticated read probe. The response body is discarded;
+ * only the HTTP status is used so account/key metadata is never exposed.
+ */
+export async function probePolyesterApiKey(): Promise<{
+  httpStatus: number;
+  authentication: "accepted" | "rejected" | "indeterminate";
+  permission: "allowed" | "denied" | "unknown";
+}> {
+  const baseUrl = (process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com").replace(/\\/$/, "");
+  const url = `${baseUrl}/auth.v1.ApiKeyService/ListApiKeys`;
+  const body = "{}";
+  const headers = createPolyesterAuthHeaders({ url, method: "POST", body });
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      ...headers,
+      "Content-Type": "application/json",
+      "Connect-Protocol-Version": "1",
+      "Accept": "application/json"
+    },
+    body
+  });
+  // Consume but never return API response data.
+  await response.arrayBuffer();
+
+  if (response.status >= 200 && response.status < 300) {
+    return { httpStatus: response.status, authentication: "accepted", permission: "allowed" };
+  }
+  if (response.status === 401) {
+    return { httpStatus: response.status, authentication: "rejected", permission: "unknown" };
+  }
+  if (response.status === 403) {
+    return { httpStatus: response.status, authentication: "accepted", permission: "denied" };
+  }
+  return { httpStatus: response.status, authentication: "indeterminate", permission: "unknown" };
+}
