@@ -195,3 +195,36 @@ export async function getPolyesterBalances(): Promise<PolyesterBalance[]> {
     };
   });
 }
+
+
+/** Sends an authenticated ConnectRPC JSON request to Polyester. */
+export async function polyesterConnectRpc<T = unknown>(
+  methodPath: string,
+  request: Record<string, unknown>
+): Promise<T> {
+  if (!/^[a-z0-9.]+\.[A-Za-z0-9]+\/[A-Za-z0-9]+$/.test(methodPath)) {
+    throw new Error("Invalid Polyester ConnectRPC method path");
+  }
+  const base = (process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com").replace(/\/$/, "");
+  const url = `${base}/${methodPath}`;
+  const body = JSON.stringify(request);
+  const signed = createPolyesterAuthHeaders({ url, method: "POST", body });
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      ...signed,
+      "Content-Type": "application/json",
+      "Connect-Protocol-Version": "1",
+      "Accept": "application/json"
+    },
+    body
+  });
+  const text = await response.text();
+  let payload: unknown;
+  try { payload = text ? JSON.parse(text) : {}; } catch { payload = { message: text.slice(0, 500) }; }
+  if (!response.ok) {
+    const detail = payload && typeof payload === "object" ? JSON.stringify(payload) : String(payload);
+    throw new Error(`Polyester ${methodPath} failed with HTTP ${response.status}: ${detail.slice(0, 700)}`);
+  }
+  return payload as T;
+}

@@ -1,6 +1,6 @@
 # Polyester MCP Connector
 
-Private MCP server for read-only Polyester Testnet account access, deployed on Vercel.
+Private MCP server for Polyester Testnet account access, deployed on Vercel.
 
 ## Deployment
 
@@ -10,16 +10,14 @@ Private MCP server for read-only Polyester Testnet account access, deployed on V
 - Runtime: Node.js 22
 - MCP transport: Streamable HTTP, stateless per request
 
-The Vercel function is implemented in `api/mcp.ts` and routed by `vercel.json`.
-
 ## Environment variables
 
-Configure these in the Vercel project settings for Preview and Production:
+Configure these in Vercel for Preview and Production:
 
-- `MCP_BEARER_TOKEN` — strong private token used by the MCP client in the `Authorization: Bearer <token>` request header.
+- `MCP_BEARER_TOKEN` — strong private token used by the MCP client in the `Authorization: Bearer <token>` header.
 - `POLYESTER_API_KEY_ID` — Polyester API key ID.
 - `POLYESTER_API_PRIVATE_KEY` — Ed25519 signing seed. Keep secret.
-- `POLYESTER_BASE_URL` — use `https://api.testnet.polyester.com` for Testnet.
+- `POLYESTER_BASE_URL` — `https://api.testnet.polyester.com` for Testnet.
 
 Never commit secrets or paste private keys into chat.
 
@@ -31,18 +29,20 @@ Never commit secrets or paste private keys into chat.
 
 The MCP bearer token is separate from the Polyester API credentials.
 
-## Available tools
+## Enabled Polyester API permissions
 
-- `polyester_status` — reports configuration and performs a harmless read-only API-key authentication probe.
-- `polyester_get_balances` — retrieves supported token balances for the authenticated account.
-- `polyester_daily_claim` — disabled; sends no request.
-- `polyester_swap_quote` — disabled; sends no request.
-- `polyester_execute_swap` — disabled; sends no request.
+The integration is limited to these three permission scopes:
+
+| Permission | Access | MCP tools |
+| --- | --- | --- |
+| Daily Status | Read | `polyester_daily_claim_status` |
+| Daily Claim | Write | `polyester_claim_daily_reward` |
+| Balances | Read | `polyester_get_balances` |
+
+No swap, trading, VIP Status, Checkpoints, withdrawal, or unrelated API operations are exposed.
 
 ## Safety model
 
-- No withdrawal or transfer tools are exposed.
-- Trading and daily claims remain disabled.
+- Daily claim execution requires the exact `CLAIM_DAILY_REWARD` confirmation.
+- No claim is executed automatically.
 - API credentials are read only from server environment variables.
-- Read-only status and balance retrieval have been tested against Polyester Testnet.
-- Do not enable trading or claims without implementing and independently testing the required signing, request validation, quote binding, expiry, slippage, and explicit confirmation safeguards.
