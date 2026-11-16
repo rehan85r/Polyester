@@ -32,7 +32,7 @@ function createServer() {
       type: "text",
       text: JSON.stringify({
         service: "polyester-mcp",
-        polyesterBaseUrl: process.env.POLYESTER_BASE_URL ?? "https://testnet.polyester.com",
+        polyesterBaseUrl: process.env.POLYESTER_BASE_URL ?? "https://api.testnet.polyester.com",
         credentialsConfigured: Boolean(process.env.POLYESTER_API_KEY_ID && process.env.POLYESTER_API_PRIVATE_KEY),
         tradingEnabled: false,
         dailyClaimEnabled: false,
