@@ -4,12 +4,26 @@
     {
       "src": "api/mcp.ts",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/auto-claim.ts",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/mcp",
       "dest": "/api/mcp.ts"
+    },
+    {
+      "src": "/api/auto-claim",
+      "dest": "/api/auto-claim.ts"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/auto-claim",
+      "schedule": "5 0 * * *"
     }
   ]
 }

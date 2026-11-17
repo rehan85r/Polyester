@@ -80,9 +80,18 @@ Set these in the Vercel project settings for both **Preview** and **Production**
 | `MCP_BEARER_TOKEN` | Yes | Random secret of at least 32 characters. The MCP client sends it as a Bearer token. |
 | `POLYESTER_API_KEY_ID` | Yes | Polyester API key ID. |
 | `POLYESTER_API_PRIVATE_KEY` | Yes | Ed25519 signing seed. Keep it secret. |
+| `CRON_SECRET` | For auto-claim | Random secret of at least 32 characters. Vercel Cron sends it as a Bearer token to `/api/auto-claim`. |
 | `POLYESTER_BASE_URL` | No | Defaults to `https://api.testnet.polyester.com`. |
 
 The MCP bearer token is separate from the Polyester API credentials.
+
+## Automatic daily claim
+
+A Vercel Cron job calls `/api/auto-claim` every day at **00:05 UTC**, shortly after the daily reward resets. The endpoint checks the claim status first and claims only when a reward is available, so repeated runs are harmless.
+
+- Requires the `CRON_SECRET` environment variable (at least 32 characters). Requests without the matching Bearer token get `401`.
+- Uses the same Polyester API key and the Claim Daily Reward permission as the MCP tool.
+- Check results in the Vercel dashboard under **Logs** or **Settings → Cron Jobs**.
 
 ## Polyester API key permissions
 
@@ -111,7 +120,8 @@ Give the API key only what these tools need:
 ```
 .
 ├── api/
-│   └── mcp.ts              # Vercel serverless handler and tool definitions
+│   ├── mcp.ts              # Vercel serverless handler and tool definitions
+│   └── auto-claim.ts       # Cron-triggered daily reward claim
 ├── src/
 │   └── polyester-auth.ts   # Request signing, ConnectRPC calls and balance lookup
 ├── .env.example            # Environment variable template
