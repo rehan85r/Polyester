@@ -44,19 +44,17 @@ No swap, trading, transfer or withdrawal tools are exposed.
 
 ## Quick start
 
-**1. Install and run locally**
+**1. Install**
 
 ```bash
 npm install
 cp .env.example .env     # then fill in the values
-npm run dev              # http://localhost:3000
 ```
 
-**2. Build for production**
+**2. Build check**
 
 ```bash
 npm run build
-npm start
 ```
 
 **3. Deploy**
@@ -83,7 +81,6 @@ Set these in the Vercel project settings for both **Preview** and **Production**
 | `POLYESTER_API_KEY_ID` | Yes | Polyester API key ID. |
 | `POLYESTER_API_PRIVATE_KEY` | Yes | Ed25519 signing seed. Keep it secret. |
 | `POLYESTER_BASE_URL` | No | Defaults to `https://api.testnet.polyester.com`. |
-| `PORT` | No | Local server port. Defaults to `3000`. |
 
 The MCP bearer token is separate from the Polyester API credentials.
 
@@ -116,7 +113,6 @@ Give the API key only what these tools need:
 ├── api/
 │   └── mcp.ts              # Vercel serverless handler and tool definitions
 ├── src/
-│   ├── index.ts            # Standalone Express server for local and container use
 │   └── polyester-auth.ts   # Request signing, ConnectRPC calls and balance lookup
 ├── .env.example            # Environment variable template
 ├── vercel.json             # Vercel build and routing config
@@ -127,8 +123,6 @@ Give the API key only what these tools need:
 
 | Command | Description |
 |---|---|
-| `npm run dev` | Start the local server with file watching. |
-| `npm run build` | Compile TypeScript to `dist/`. |
-| `npm start` | Run the compiled server. |
+| `npm run build` | Type-check and compile TypeScript to `dist/`. |
 
 </div>
